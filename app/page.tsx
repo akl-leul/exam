@@ -19,6 +19,7 @@ import {
   MessageSquareText, // For announcement item
 } from "lucide-react";
 import { Announcement as PrismaAnnouncement, ScheduledExam as PrismaScheduledExam, Teacher } from "@prisma/client";
+import { notFound } from "next/navigation";
 
 type AnnouncementWithAuthor = PrismaAnnouncement & {
   teacher: Pick<Teacher, 'username'>;
@@ -28,7 +29,7 @@ type ScheduledExamWithAuthor = PrismaScheduledExam & {
   // Ensure duration is part of the type if it's optional in Prisma model
   duration?: number | null; 
 };
-
+ 
 async function fetchData(url: string) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
