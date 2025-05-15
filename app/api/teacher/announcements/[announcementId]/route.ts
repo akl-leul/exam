@@ -43,17 +43,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-   const teacherId = await getAuthenticatedTeacherId(req); // <--- THIS IS THE CRITICAL LINE
-  if (!teacherId) {
-    console.warn(`${logPrefix} Unauthorized POST attempt.`);
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 }); // <--- THIS IS THE RESPONSE
-  }
   const logPrefix = "API POST /api/teacher/announcements:";
   console.log(`${logPrefix} Request received.`);
+
   try {
     const teacherId = await getAuthenticatedTeacherId(req);
     if (!teacherId) {
-      console.warn(`${logPrefix} Unauthorized POST attempt.`);
+      console.warn(`${logPrefix} Unauthorized POST attempt. No teacherId found.`);
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
     console.log(`${logPrefix} Authenticated teacher ID: ${teacherId}`);
@@ -78,44 +74,38 @@ export async function POST(req: NextRequest) {
     console.log(`${logPrefix} Zod validation successful.`);
     const { title, content, expiresAt, isPublished } = validation.data;
 
-    // Convert expiresAt string to Date object if present
     const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
 
-    console.log(`${logPrefix} Creating announcement with title: "${title}"`);
+    console.log(`${logPrefix} Creating announcement with title: "${title}" for teacherId: ${teacherId}`);
     const newAnnouncement = await prisma.announcement.create({
       data: {
         title,
         content,
         teacherId,
         expiresAt: expiresAtDate,
-        isPublished: isPublished ?? true, // Default to true if not provided by client
+        isPublished: isPublished ?? true,
       },
-      // Include teacher details directly in the create response if possible,
-      // otherwise, a subsequent fetch is needed as shown below.
-      // Prisma's create often doesn't deeply include relations by default.
     });
     console.log(`${logPrefix} Announcement created with ID: ${newAnnouncement.id}`);
 
-    // Fetch the created announcement with the teacher details to match frontend type
     const announcementWithAuthor = await prisma.announcement.findUnique({
-        where: { id: newAnnouncement.id },
-        include: {
-            teacher: {
-                select: { username: true }
-            }
+      where: { id: newAnnouncement.id },
+      include: {
+        teacher: {
+          select: { username: true }
         }
+      }
     });
 
     if (!announcementWithAuthor) {
-        // This case should ideally not happen if creation was successful
-        console.error(`${logPrefix} Failed to retrieve created announcement with author details. ID: ${newAnnouncement.id}`);
-        return NextResponse.json({ message: 'Announcement created, but failed to retrieve full details.' }, { status: 500 });
+      console.error(`${logPrefix} Failed to retrieve created announcement with author details. ID: ${newAnnouncement.id}`);
+      return NextResponse.json({ message: 'Announcement created, but failed to retrieve full details.' }, { status: 500 });
     }
 
     console.log(`${logPrefix} Successfully created and retrieved announcement:`, announcementWithAuthor);
     return NextResponse.json({
       message: 'Announcement created successfully',
-      announcement: announcementWithAuthor // Send the one with teacher details
+      announcement: announcementWithAuthor
     }, { status: 201 });
 
   } catch (error: any) {
@@ -125,14 +115,14 @@ export async function POST(req: NextRequest) {
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       responseMessage = `Database error occurred (Code: ${error.code}).`;
-      // Example: P2002 - Unique constraint failed
-      // Example: P2003 - Foreign key constraint failed (e.g., invalid teacherId, though auth should prevent this)
-      if (error.code === 'P2003') {
-        statusCode = 400; // Bad request due to data integrity
-        responseMessage = "Failed due to a data conflict (e.g., related record not found).";
+      if (error.code === 'P2002') {
+        responseMessage = `An announcement with similar details might already exist. (Code: ${error.code})`;
+        statusCode = 409;
+      } else if (error.code === 'P2003') {
+        responseMessage = `Failed due to a data conflict (e.g., related record not found, possibly an invalid teacher ID). (Code: ${error.code})`;
+        statusCode = 400;
       }
     }
-    // Consider also checking for Prisma.PrismaClientValidationError if complex writes are involved
 
     return NextResponse.json({ message: responseMessage, detail: error.message }, { status: statusCode });
   }
