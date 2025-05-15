@@ -3,7 +3,7 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation'; // For App Router navigation
-import { LogIn, AlertTriangle, Loader2 } from 'lucide-react'; // Icons
+import { LogIn, AlertTriangle , Loader2 } from 'lucide-react'; // Icons
 
 export default function TeacherLoginPage() {
   const [username, setUsername] = useState('');
@@ -109,9 +109,9 @@ export default function TeacherLoginPage() {
           </button>
         </form>
         {/* Optional: Add a link to homepage or registration if applicable */}
-        {/* <p className="text-xs text-center text-gray-500 mt-6">
+        <p className="text-xs text-center text-gray-500 mt-6">
           Not a teacher? <a href="/" className="text-indigo-600 hover:underline">Go to homepage</a>.
-        </p> */}
+        </p>
       </div>
     </div>
   );

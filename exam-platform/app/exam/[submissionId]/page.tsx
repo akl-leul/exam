@@ -1,11 +1,9 @@
-// app/exam/[submissionId]/page.tsx
 "use client";
 import { useState, useEffect, FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { QuestionType } from '@prisma/client';
-import { Clock, Send, AlertTriangle, Loader2 } from 'lucide-react'; // Ensure all used icons are imported
+import { Clock, Send, AlertTriangle, Loader2 } from 'lucide-react';
 
-// ... (your type definitions: ExamOptionForStudent, ExamQuestionForStudent, StudentAnswerPayload) ...
 type ExamOptionForStudent = { id: string; text: string };
 type ExamQuestionForStudent = {
   id: string; text: string; type: QuestionType; order: number; options: ExamOptionForStudent[];
@@ -14,94 +12,97 @@ type StudentAnswerPayload = {
   questionId: string; selectedOptionId?: string; textAnswer?: string;
 };
 
-
 export default function ExamTakingPage() {
   const params = useParams();
   const router = useRouter();
-  // submissionId is the dynamic part of the URL for this page
-  const submissionIdFromParams = params.submissionId as string; 
-  const logPrefix = "ExamTakingPage:"; // CORRECTED logPrefix for this page
+  const submissionIdFromParams = params.submissionId as string;
+  const logPrefix = "ExamTakingPage:";
 
   const [examData, setExamData] = useState<{
-    title: string; header?: string | null; studentName: string; questions: ExamQuestionForStudent[];
+    title: string;
+    header?: string | null;
+    studentName: string;
+    questions: ExamQuestionForStudent[];
+    durationSeconds?: number; // <-- Add timer field
   } | null>(null);
+
   const [studentAnswers, setStudentAnswers] = useState<Record<string, StudentAnswerPayload>>({});
   const [isLoadingExam, setIsLoadingExam] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmittingExam, setIsSubmittingExam] = useState(false);
   const [submissionError, setSubmissionError] = useState('');
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
+  // Fetch exam data and initialize timer
   useEffect(() => {
-    // Use submissionIdFromParams consistently within this hook
-    console.log(`${logPrefix} useEffect triggered. submissionId:`, submissionIdFromParams); 
-
-    if (!submissionIdFromParams) { // CORRECTED: Check submissionIdFromParams
-      console.error(`${logPrefix} No submissionId in params.`); // CORRECTED: Log message
-      setErrorMessage("Exam session ID is missing from the URL. Cannot load exam."); // CORRECTED: Error message
+    if (!submissionIdFromParams) {
+      setErrorMessage("Exam session ID is missing from the URL. Cannot load exam.");
       setIsLoadingExam(false);
       return;
     }
-
     setIsLoadingExam(true);
     setErrorMessage('');
-    fetch(`/api/submissions/${submissionIdFromParams}/questions`) // Use submissionIdFromParams
+    fetch(`/api/submissions/${submissionIdFromParams}/questions`)
       .then(async (res) => {
-        console.log(`${logPrefix} Fetch questions for submission ${submissionIdFromParams} - Status: ${res.status}`);
         const resText = await res.text();
         if (!res.ok) {
           let msg = `Error ${res.status}: Could not load exam questions.`;
-          try { 
+          try {
             const errData = JSON.parse(resText);
             msg = errData.message || msg;
             if (errData.redirectToResults && errData.submissionId) {
-                console.warn(`${logPrefix} Exam already submitted, redirecting to results for submission:`, errData.submissionId);
-                router.replace(`/exam/${errData.submissionId}/result`);
-                setErrorMessage("This exam has already been submitted. Redirecting to results..."); 
-                return null; 
+              router.replace(`/exam/${errData.submissionId}/result`);
+              setErrorMessage("This exam has already been submitted. Redirecting to results...");
+              return null;
             }
-          } catch (e) { console.warn(`${logPrefix} Could not parse error response as JSON. Raw response for submission ${submissionIdFromParams}:`, resText); }
-          console.error(`${logPrefix} Error fetching questions for submission ${submissionIdFromParams} -`, msg);
+          } catch (e) {}
           throw new Error(msg);
         }
         return JSON.parse(resText);
       })
       .then(data => {
-        if (data === null) return; 
-        console.log(`${logPrefix} Questions fetched successfully for submission ${submissionIdFromParams}:`, data);
-        if (!data.questions || !Array.isArray(data.questions)) {
-            console.error(`${logPrefix} Invalid question data received from server for submission ${submissionIdFromParams}.`);
-            throw new Error("Invalid question data received from server.");
-        }
+        if (data === null) return;
         setExamData({
           title: data.examTitle,
           header: data.examHeader,
           studentName: data.studentName,
           questions: data.questions,
+          durationSeconds: data.durationSeconds, // <-- Store timer value if present
         });
         const initialAnswers: Record<string, StudentAnswerPayload> = {};
         data.questions.forEach((q: ExamQuestionForStudent) => {
           initialAnswers[q.id] = { questionId: q.id };
         });
         setStudentAnswers(initialAnswers);
-        console.log(`${logPrefix} Initialized studentAnswers state for submission ${submissionIdFromParams}:`, initialAnswers);
       })
       .catch(err => {
-        console.error(`${logPrefix} Catch block for fetching questions for submission ${submissionIdFromParams} -`, err);
-        if (!errorMessage) { 
-            setErrorMessage(err.message || "An error occurred while loading the exam.");
-        }
+        if (!errorMessage) setErrorMessage(err.message || "An error occurred while loading the exam.");
       })
-      .finally(() => {
-        setIsLoadingExam(false);
-        console.log(`${logPrefix} Fetching questions finished for submission ${submissionIdFromParams}.`);
-      });
-  // Ensure submissionIdFromParams is in the dependency array if it's derived from params
-  // router and errorMessage are also dependencies if their change should trigger re-fetch or has logic inside.
-  }, [submissionIdFromParams, router, errorMessage]); 
+      .finally(() => setIsLoadingExam(false));
+  }, [submissionIdFromParams, router, errorMessage]);
+
+  // Initialize timer when examData loads
+  useEffect(() => {
+    if (examData?.durationSeconds && typeof examData.durationSeconds === "number") {
+      setTimeLeft(examData.durationSeconds);
+    }
+  }, [examData?.durationSeconds]);
+
+  // Timer countdown effect
+  useEffect(() => {
+    if (timeLeft === null) return;
+    if (timeLeft <= 0) {
+      if (!isSubmittingExam) {
+        handleSubmitExam(null, true); // auto-submit
+      }
+      return;
+    }
+    const timer = setTimeout(() => setTimeLeft((t) => (t !== null ? t - 1 : t)), 1000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line
+  }, [timeLeft]);
 
   const handleAnswerChange = (questionId: string, questionType: QuestionType, value: string) => {
-    // ... (this function should be fine as is) ...
-    console.log(`${logPrefix} Answer changed for Q_ID ${questionId}, Type ${questionType}, Value: ${value}`);
     setStudentAnswers(prevAnswers => ({
       ...prevAnswers,
       [questionId]: {
@@ -114,51 +115,50 @@ export default function ExamTakingPage() {
     }));
   };
 
-  const handleSubmitExam = async (e: FormEvent) => {
-    // ... (this function needs to use submissionIdFromParams for its API call) ...
-    e.preventDefault();
-    console.log(`${logPrefix} handleSubmitExam called for submission ${submissionIdFromParams}.`);
-    
-    const unansweredQuestions = examData?.questions.filter(q => { /* ... */ }).length || 0;
-    // ... (confirmation logic) ...
-    if (!window.confirm(/* ... confirmationMessage ... */)) { return; }
+  // Accept autoSubmit flag for timer
+  const handleSubmitExam = async (e: FormEvent | null, autoSubmit = false) => {
+    if (e) e.preventDefault();
+    if (!examData) return;
+
+    const unansweredQuestions = examData.questions.filter(q => {
+      const ans = studentAnswers[q.id];
+      if (q.type === QuestionType.MCQ || q.type === QuestionType.TRUE_FALSE) {
+        return !ans?.selectedOptionId;
+      } else if (q.type === QuestionType.SHORT_ANSWER) {
+        return !ans?.textAnswer || ans.textAnswer.trim() === '';
+      }
+      return true;
+    }).length;
+
+    if (!autoSubmit) {
+      let confirmationMessage = "Are you sure you want to submit your answers?";
+      if (unansweredQuestions > 0) {
+        confirmationMessage = `You have ${unansweredQuestions} unanswered question${unansweredQuestions > 1 ? "s" : ""}. Submit anyway?`;
+      }
+      if (!window.confirm(confirmationMessage)) return;
+    }
 
     setIsSubmittingExam(true);
     setSubmissionError('');
     const answersToSubmit = Object.values(studentAnswers);
-    console.log(`${logPrefix} Submitting answers for submission ${submissionIdFromParams}:`, answersToSubmit);
 
     try {
-      const response = await fetch(`/api/submissions/${submissionIdFromParams}/submit`, { // Use submissionIdFromParams
+      const response = await fetch(`/api/submissions/${submissionIdFromParams}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers: answersToSubmit }),
       });
-      // ... (rest of submit logic, ensure logs use submissionIdFromParams) ...
-      console.log(`${logPrefix} API POST /api/submissions/${submissionIdFromParams}/submit - Status: ${response.status}`);
       const responseData = await response.json();
-
-      if (!response.ok) {
-        console.error(`${logPrefix} API error submitting exam for submission ${submissionIdFromParams}. Status: ${response.status}. ResponseData:`, responseData);
-        throw new Error(responseData.message || `Error ${response.status}: Could not submit your answers.`);
-      }
-      
-      console.log(`${logPrefix} Exam submitted successfully for submission ${submissionIdFromParams}, API response:`, responseData);
-      router.push(`/exam/${submissionIdFromParams}/result`); // Use submissionIdFromParams
-
+      if (!response.ok) throw new Error(responseData.message || `Error ${response.status}: Could not submit your answers.`);
+      router.push(`/exam/${submissionIdFromParams}/result`);
     } catch (err: any) {
-      console.error(`${logPrefix} Catch block for submitting exam for submission ${submissionIdFromParams} -`, err);
       setSubmissionError(err.message || "An unexpected error occurred during submission. Please try again.");
     } finally {
       setIsSubmittingExam(false);
-      console.log(`${logPrefix} Submitting exam process finished for submission ${submissionIdFromParams}.`);
     }
   };
 
   // --- JSX Rendering ---
-  // The JSX structure should remain the same as in the previous "updated code" response.
-  // Just ensure any dynamic parts also correctly reflect that this page is about a 'submissionId'.
-
   if (isLoadingExam) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
@@ -168,27 +168,27 @@ export default function ExamTakingPage() {
     );
   }
 
-  if (errorMessage && !examData) { 
+  if (errorMessage && !examData) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-4 text-center">
         <AlertTriangle size={48} className="text-red-600 mb-4" />
         <h1 className="text-2xl font-bold text-red-700 mb-3">Error Loading Exam</h1>
         <p className="text-red-600 mb-6">{errorMessage}</p>
-        <button 
-            onClick={() => router.push('/')} 
-            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        <button
+          onClick={() => router.push('/')}
+          className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
         >
-            Go to Homepage
+          Go to Homepage
         </button>
       </div>
     );
   }
-  
-  if (!examData) { 
+
+  if (!examData) {
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
-            <p>No exam data available for this session. This might be a temporary issue or the session is invalid.</p>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+        <p>No exam data available for this session. This might be a temporary issue or the session is invalid.</p>
+      </div>
     );
   }
 
@@ -205,6 +205,25 @@ export default function ExamTakingPage() {
           <p className="text-sm text-indigo-600 font-medium">
             Taking exam as: {examData.studentName}
           </p>
+          {/* TIMER */}
+          {typeof examData.durationSeconds === "number" && (
+            <div className="flex items-center justify-center mt-4">
+              <Clock className="text-indigo-500 mr-2" />
+              {typeof timeLeft === "number" && timeLeft > 0 ? (
+                <>
+                  <span className="text-lg font-semibold text-indigo-700">
+                    {Math.floor(timeLeft / 60).toString().padStart(2, "0")}:
+                    {(timeLeft % 60).toString().padStart(2, "0")}
+                  </span>
+                  <span className="ml-2 text-sm text-gray-500">Time Remaining</span>
+                </>
+              ) : timeLeft === 0 ? (
+                <span className="text-red-600 font-semibold ml-2">
+                  Time is up! Submitting your answers...
+                </span>
+              ) : null}
+            </div>
+          )}
         </header>
 
         {submissionError && (
@@ -219,7 +238,6 @@ export default function ExamTakingPage() {
             <div key={q.id} className="bg-white p-5 sm:p-6 rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow">
               <p className="text-xs font-semibold text-blue-600 mb-1">Question {index + 1}</p>
               <p className="text-md sm:text-lg font-medium text-gray-800 mb-4 whitespace-pre-wrap">{q.text}</p>
-              
               {q.type === QuestionType.MCQ && (
                 <div className="space-y-2">
                   {q.options.map(opt => (
@@ -235,10 +253,9 @@ export default function ExamTakingPage() {
                   ))}
                 </div>
               )}
-
               {q.type === QuestionType.TRUE_FALSE && (
                 <div className="space-y-2">
-                  {q.options.map(opt => ( 
+                  {q.options.map(opt => (
                     <label key={opt.id} className="flex items-center p-3 border rounded-md hover:bg-indigo-50 cursor-pointer transition-colors has-[:checked]:bg-indigo-100 has-[:checked]:border-indigo-400">
                       <input
                         type="radio" name={`question-${q.id}`} value={opt.id}
@@ -251,7 +268,6 @@ export default function ExamTakingPage() {
                   ))}
                 </div>
               )}
-
               {q.type === QuestionType.SHORT_ANSWER && (
                 <textarea
                   rows={3}

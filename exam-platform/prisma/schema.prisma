@@ -97,27 +97,32 @@ model Answer {
 }
  
 model Announcement {
-  id         String   @id @default(cuid())
-  title      String
-  content    String
-  expiresAt  DateTime?
-  isPublished Boolean @default(true)
-  createdAt  DateTime @default(now())
-  teacher    Teacher  @relation(fields: [teacherId], references: [id])
-  teacherId  String
+  id          String   @id @default(cuid())
+  title       String
+  content     String   // REMOVED @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  teacherId   String
+  expiresAt   DateTime?
+  isPublished Boolean  @default(true)
 }
 
 model ScheduledExam {
-  id         String   @id @default(cuid())
-  examTitle  String
-  description String?
-  examDate   DateTime
-  duration   Int?
-  course     String?
-  location   String?
-  notes      String?
-  isPublished Boolean @default(true)
-  createdAt  DateTime @default(now())
-  teacher    Teacher  @relation(fields: [teacherId], references: [id])
-  teacherId  String
+  id          String   @id @default(cuid())
+  examTitle   String
+  description String?  // REMOVED @db.Text
+  examDate    DateTime
+  duration    String?
+  course      String?
+  location    String?
+  notes       String?  // REMOVED @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  teacherId   String
+  isPublished Boolean  @default(true)
+  // Optional exam relation:
+  // examId      String?  @unique
+  // exam        Exam?    @relation(fields: [examId], references: [id], onDelete: SetNull)
 }
