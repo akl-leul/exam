@@ -1,52 +1,35 @@
-// lib/auth.ts
-import { cookies } from "next/headers";
-import prisma from "./prisma"; // your Prisma client instance
+import bcrypt from "bcryptjs"
+import jwt from "jsonwebtoken"
+import { prisma } from "./prisma"
 
-// Define your cookie names (adjust if needed)
-export const TEACHER_AUTH_TOKEN = "teacherAuthToken";
-export const TEACHER_ID_COOKIE = "teacherId";
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
 
-/**
- * Validates the teacher auth token and returns the teacher ID if authenticated.
- * @param req NextRequest (optional, not used here because cookies() reads current cookies)
- * @returns teacher ID string or null if not authenticated
- */
-export async function getAuthenticatedTeacherId(): Promise<string | null> {
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 12)
+}
+
+export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
+  return bcrypt.compare(password, hashedPassword)
+}
+
+export function generateToken(userId: string, role: string): string {
+  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "7d" })
+}
+
+export function verifyToken(token: string): { userId: string; role: string } | null {
   try {
-    const cookieStore = cookies();
-
-    const authToken = cookieStore.get(TEACHER_AUTH_TOKEN)?.value;
-    const teacherIdFromCookie = cookieStore.get(TEACHER_ID_COOKIE)?.value;
-
-    console.log("AuthCheck: Token:", authToken, "TeacherIDCookie:", teacherIdFromCookie);
-
-    if (!authToken || !teacherIdFromCookie) {
-      console.warn("Auth: Missing auth token or teacher ID cookie.");
-      return null;
-    }
-
-    // Query your database to verify the teacher and token
-    // Assuming you store tokens in your teacher table or a separate session table
-    const teacher = await prisma.teacher.findUnique({
-      where: { id: teacherIdFromCookie },
-      select: { id: true, authToken: true }, // Adjust field names accordingly
-    });
-
-    if (!teacher) {
-      console.warn(`Auth: Teacher with ID ${teacherIdFromCookie} not found.`);
-      return null;
-    }
-
-    // Verify token matches (adjust if you hash tokens)
-    if (teacher.authToken !== authToken) {
-      console.warn(`Auth: Invalid token for teacher ID ${teacherIdFromCookie}.`);
-      return null;
-    }
-
-    console.log(`Auth: Authenticated teacher ID: ${teacher.id}`);
-    return teacher.id;
-  } catch (error) {
-    console.error("Auth: Error validating teacher authentication:", error);
-    return null;
+    return jwt.verify(token, JWT_SECRET) as { userId: string; role: string }
+  } catch {
+    return null
   }
+}
+
+export async function getCurrentUser(token: string) {
+  const decoded = verifyToken(token)
+  if (!decoded) return null
+
+  return prisma.user.findUnique({
+    where: { id: decoded.userId },
+    select: { id: true, email: true, name: true, role: true },
+  })
 }

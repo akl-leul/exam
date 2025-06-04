@@ -1,36 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Exam Portal
+
+A comprehensive online examination system built with Next.js, Prisma, and PostgreSQL.
+
+## Features
+
+- 🔐 **Authentication System** - Secure login/register with JWT tokens
+- 👥 **Role-based Access** - Admin and Student roles with different permissions
+- 📝 **Exam Management** - Create, edit, and manage exams with multiple question types
+- ⏱️ **Timed Exams** - Built-in timer functionality for exam sessions
+- 📊 **Results & Analytics** - Automatic grading and result tracking
+- 📱 **Responsive Design** - Works seamlessly on desktop and mobile devices
+
+## Tech Stack
+
+- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes, Prisma ORM
+- **Database**: PostgreSQL (Prisma Postgres)
+- **Authentication**: JWT with HTTP-only cookies
+- **UI Components**: shadcn/ui, Radix UI
 
 ## Getting Started
 
-First, run the development server:
- 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Prerequisites
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Node.js 18+ installed
+- A Prisma Postgres database (already configured)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Installation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Clone the repository**
+   \`\`\`bash
+   git clone <repository-url>
+   cd exam-portal
+   \`\`\`
 
-## Learn More
+2. **Install dependencies**
+   \`\`\`bash
+   npm install --legacy-peer-deps
+   \`\`\`
 
-To learn more about Next.js, take a look at the following resources:
+3. **Environment variables are already configured**
+   - The `.env` file contains all production-ready environment variables
+   - Database URL, JWT secrets, and NextAuth configuration are set
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. **Generate Prisma client**
+   \`\`\`bash
+   npm run db:generate
+   \`\`\`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. **Push database schema**
+   \`\`\`bash
+   npm run db:push
+   \`\`\`
 
-## Deploy on Vercel
+6. **Start the development server**
+   \`\`\`bash
+   npm run dev
+   \`\`\`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+7. **Open your browser**
+   Navigate to `http://localhost:3000`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Default Admin Credentials
+
+- **Email**: teacher@gmail.com
+- **Password**: password123
+
+The admin user will be automatically created on first login attempt.
+
+## Deployment
+
+This application is configured for deployment on Vercel:
+
+1. **Push to GitHub**
+2. **Connect to Vercel**
+3. **Environment variables are already set in .env file**
+4. **Deploy**
+
+The application will automatically handle database migrations and setup.
+
+## Production Environment
+
+The application is configured with:
+- **Database**: Prisma Postgres with connection pooling
+- **Authentication**: Secure JWT tokens with HTTP-only cookies
+- **Deployment**: Optimized for Vercel with proper build configuration
+- **Security**: Production-ready environment variables
+
+## Database Schema
+
+The application uses the following main entities:
+
+- **Users** - Admin and Student accounts
+- **Exams** - Exam definitions with metadata
+- **Questions** - Individual questions with multiple types
+- **Options** - Answer choices for multiple-choice questions
+- **ExamAttempts** - Student exam sessions
+- **Answers** - Student responses to questions
+
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/login` - User login
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/logout` - User logout
+
+### Exams
+- `GET /api/exams` - List all active exams
+- `POST /api/exams` - Create new exam (Admin only)
+- `POST /api/exams/[id]/attempt` - Start exam attempt
+- `POST /api/exams/[id]/submit` - Submit exam answers
+
+### Admin
+- `GET /api/admin/exams` - Admin exam management
+- `GET /api/admin/stats` - Dashboard statistics
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.

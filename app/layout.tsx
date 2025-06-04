@@ -1,19 +1,28 @@
-// app/layout.tsx
-import './globals.css';
+import type React from "react"
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
+import "./globals.css"
+import { Toaster } from "@/components/ui/toaster"
 
-export const metadata = {
- title: 'ExamPortal',
- description: 'An online platform for creating, managing, and taking exams with real-time results and analytics.'
+const inter = Inter({ subsets: ["latin"] })
 
-};
+export const metadata: Metadata = {
+  title: "Exam Portal",
+  description: "Online Examination System",
+    generator: 'v0.dev'
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="en">
-      <head>
-        {/* Add any global scripts or meta tags here */}
-      </head>
-      <body className='overflow-x-hidden'>{children}</body>
+      <body className={inter.className}>
+        {children}
+        <Toaster />
+      </body>
     </html>
-  );
+  )
 }

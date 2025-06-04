@@ -1,128 +1,119 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  binaryTargets   = ["native", "rhel-openssl-1.0.x"]
 }
 
 datasource db {
-  provider = "sqlite" // Or "postgresql", "mysql", etc.
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
 }
 
-model Teacher {
-  id            String          @id @default(cuid())
-  username      String          @unique
-  passwordHash  String
-  exams         Exam[]
-  announcements Announcement[]  // ADDED: Back-relation to Announcement
-  scheduledExams ScheduledExam[] // ADDED: Back-relation to ScheduledExam
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(STUDENT)
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Student relations
+  examAttempts ExamAttempt[]
+  answers      Answer[]
+
+  // Admin relations
+  createdExams Exam[] @relation("ExamCreator")
+
+  @@map("users")
 }
 
 model Exam {
-  id           String       @id @default(cuid())
-  title        String
-  instructions String?
-  header       String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  teacher      Teacher      @relation(fields: [teacherId], references: [id])
-  teacherId    String
-  questions    Question[]
-  submissions  Submission[]
-}
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  duration    Int      // in minutes
+  totalMarks  Int
+  isActive    Boolean   @default(true)
+  startTime   DateTime?
+  endTime     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-enum QuestionType {
-  MCQ
-  TRUE_FALSE
-  SHORT_ANSWER
+  createdBy String
+  creator   User   @relation("ExamCreator", fields: [createdBy], references: [id])
+
+  questions    Question[]
+  examAttempts ExamAttempt[]
+
+  @@map("exams")
 }
 
 model Question {
-  id         String       @id @default(cuid())
-  text       String
-  type       QuestionType
-  order      Int
-  exam       Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
-  examId     String
-  options    Option[]
-  answers    Answer[]
+  id       String       @id @default(cuid())
+  question String
+  type     QuestionType
+  marks    Int
+  examId   String
+  exam     Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  options Option[]
+  answers Answer[]
+
+  @@map("questions")
 }
 
 model Option {
-  id                   String   @id @default(cuid())
-  text                 String
-  isCorrect            Boolean  @default(false)
-  question             Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  questionId           String
-  answersSelectingThis Answer[] @relation("SelectedOptionAnswers")
+  id         String   @id @default(cuid())
+  text       String
+  isCorrect  Boolean  @default(false)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("options")
 }
 
-model StudentInfo {
-  id          String       @id @default(cuid())
-  name        String
-  section     String
-  grade       String
-  createdAt   DateTime     @default(now())
-  submissions Submission[]
-}
+model ExamAttempt {
+  id          String    @id @default(cuid())
+  studentId   String
+  examId      String
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  score       Int?
+  totalMarks  Int
+  isCompleted Boolean   @default(false)
 
-model Submission {
-  id            String      @id @default(cuid())
-  status        String      @default("STARTED")
-  exam          Exam        @relation(fields: [examId], references: [id])
-  examId        String
-  studentInfo   StudentInfo @relation(fields: [studentInfoId], references: [id])
-  studentInfoId String
-  submittedAt   DateTime?
-  answers       Answer[]
-  score         Float?
-  isFullyGraded Boolean     @default(false)
-  // department    String? // Kept commented out as per previous fix, uncomment if you add it to forms
+  student User  @relation(fields: [studentId], references: [id])
+  exam    Exam  @relation(fields: [examId], references: [id])
+  answers Answer[]
+
+  @@unique([studentId, examId])
+  @@map("exam_attempts")
 }
 
 model Answer {
-  id               String     @id @default(cuid())
-  submission       Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  submissionId     String
-  question         Question   @relation(fields: [questionId], references: [id])
-  questionId       String
-  selectedOption   Option?    @relation(fields: [selectedOptionId], references: [id], name: "SelectedOptionAnswers")
-  selectedOptionId String?
-  textAnswer       String?
-  isCorrect        Boolean?
-  pointsAwarded    Float?
+  id            String  @id @default(cuid())
+  studentId     String
+  questionId    String
+  examAttemptId String
+  selectedOption String?
+  textAnswer    String?
 
-  @@unique([submissionId, questionId])
-}
- 
-model Announcement {
-  id          String   @id @default(cuid())
-  title       String
-  content     String   // REMOVED @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  teacher     Teacher  @relation(fields: [teacherId], references: [id])
-  teacherId   String
-  expiresAt   DateTime?
-  isPublished Boolean  @default(true)
+  student     User        @relation(fields: [studentId], references: [id])
+  question    Question    @relation(fields: [questionId], references: [id])
+  examAttempt ExamAttempt @relation(fields: [examAttemptId], references: [id])
+
+  @@unique([studentId, questionId, examAttemptId])
+  @@map("answers")
 }
 
-model ScheduledExam {
-  id          String   @id @default(cuid())
-  examTitle   String
-  description String?  // REMOVED @db.Text
-  examDate    DateTime
-  duration    String?
-  course      String?
-  location    String?
-  notes       String?  // REMOVED @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  teacher     Teacher  @relation(fields: [teacherId], references: [id])
-  teacherId   String
-  isPublished Boolean  @default(true)
-  // Optional exam relation:
-  // examId      String?  @unique
-  // exam        Exam?    @relation(fields: [examId], references: [id], onDelete: SetNull)
+enum Role {
+  ADMIN
+  STUDENT
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
 }
